@@ -3,7 +3,6 @@ import {
     HorizontalBox,
     LineEdit,
     Button,
-    ScrollView,
     GridBox,
     SpinBox,
     CheckBox,
@@ -11,6 +10,16 @@ import {
     ComboBox,
     ListView,
 } from "std-widgets.slint";
+
+import { Style } from "style.slint";
+import {
+    DiffParameter,
+    DiffLine,
+    LineNumbers,
+    FileDiffView,
+} from "file_diff_widget.slint";
+
+export { Style, DiffParameter, DiffLine, LineNumbers }
 
 import "../assets/fonts/JetBrainsMonoNL-Thin.ttf";
 import "../assets/fonts/JetBrainsMonoNL-ExtraLight.ttf";
@@ -21,70 +30,110 @@ import "../assets/fonts/JetBrainsMonoNL-Bold.ttf";
 import "../assets/fonts/JetBrainsMonoNL-SemiBold.ttf";
 import "../assets/fonts/JetBrainsMonoNL-ExtraBold.ttf";
 
-export struct LineNumbers {
-    old_no: int,
-    new_no: int,
-}
+component FormatEditor inherits HorizontalLayout {
+    in property <int> current_theme_index;
+    in property <[string]> themes;
+    callback set_theme(string);
 
-export struct DiffParameter {
-    from: string,
-    to: string,
-    repository: string,
-    filename: string,
-}
-
-export enum LineStatus {
-    Added,
-    Removed,
-    Unchanged,
-}
-
-export struct DiffLine {
-    source_line: string,
-    styled_line: styled-text,
-    status: LineStatus,
-    note: string,
-    is_done: bool,
-    old_line_no: int,
-    new_line_no: int,
-}
-
-component LineNumber inherits HorizontalLayout {
-    in property <int> line_number;
-    in property <int> model_length;
-    in property <length> font_size;
-
-    horizontal-stretch: 0;
+    alignment: start;
     spacing: 5px;
-    padding-left: 5px;
-    padding-right: 5px;
-    Rectangle {
-        width: dummy.preferred-width;
-        height: dummy.preferred-height;
 
-        dummy := Text {
-            text: "\{root.model_length}";
-            color: Colors.transparent;
-            font-size: root.font_size;
-            font-family: "JetBrains Mono NL";
+    HorizontalLayout {
+        spacing: 5px;
+        Text {
+            text: "Font size";
+            vertical-alignment: center;
+            horizontal-alignment: center;
         }
 
-        Text {
-            x: 0;
-            y: 0;
-            width: 100%;
-            height: 100%;
-            vertical-alignment: top;
-            horizontal-alignment: right;
-            text: root.line_number != -1 ? root.line_number : "";
-            font-size: root.font_size;
-            font-family: "JetBrains Mono NL";
+        SpinBox {
+            minimum: 6;
+            maximum: 40;
+            value: Style.font_size / 1px;
+            edited(value) => {
+                Style.font_size = value * 1px;
+            }
         }
     }
 
-    Rectangle {
-        width: 1px;
-        background: grey;
+    HorizontalLayout {
+        spacing: 5px;
+        Text {
+            text: "Color theme";
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+
+        ComboBox {
+            width: 200px;
+            current-index: root.current_theme_index;
+            model: root.themes;
+            selected(current-value) => {
+                root.set_theme(current-value)
+            }
+        }
+    }
+}
+
+component DiffParameterEditor inherits GridBox {
+    in-out property <DiffParameter> parameter;
+    callback load_diff();
+
+    spacing: 10px;
+
+    Row {
+        Text {
+            text: "From Commit:";
+            vertical-alignment: center;
+        }
+
+        LineEdit {
+            text <=> parameter.from;
+        }
+
+        Text {
+            text: "To Commit:";
+            vertical-alignment: center;
+        }
+
+        LineEdit {
+            text <=> parameter.to;
+        }
+    }
+
+    Row {
+        Text {
+            text: "Repository";
+            vertical-alignment: center;
+        }
+
+        LineEdit {
+            text <=> parameter.repository;
+        }
+
+        Text {
+            text: "File to diff";
+            vertical-alignment: center;
+        }
+
+        LineEdit {
+            text <=> parameter.filename;
+        }
+    }
+
+    Row {
+        Rectangle {
+            colspan: 4;
+
+            Button {
+                width: 100px;
+                text: "Load Diff";
+                enabled: !parameter.filename.is-empty && !parameter.from.is-empty && !parameter.to.is-empty && !parameter.repository.is-empty;
+                clicked => {
+                    load_diff();
+                }
+            }
+        }
     }
 }
 
@@ -94,22 +143,15 @@ export component AppWindow inherits Window {
     title: "Git Diff Viewer";
 
     in property <[DiffLine]> diff_model;
-    private property <string> line_number_max_digits: "\{diff_model.length}";
-
-    in property <[LineNumbers]> line_model;
     in property <[string]> themes;
     in-out property <int> current_theme_index;
-
+    private property <string> line_number_max_digits: "\{diff_model.length}";
     private property <DiffParameter> parameter: {
         from: "",
         to: "",
         repository: "",
         filename: "",
     };
-    private property <color> added_color: #507955;
-    private property <color> removed_color: #b2596a;
-    private property <length> font_size: 12px;
-    private property <string> note: "";
 
     callback load_diff(DiffParameter);
     callback set_theme(string);
@@ -118,258 +160,23 @@ export component AppWindow inherits Window {
         padding: 10px;
         spacing: 10px;
 
-        GridBox {
-            spacing: 10px;
-
-            Row {
-                Text {
-                    text: "From Commit:";
-                    vertical-alignment: center;
-                }
-
-                LineEdit {
-                    text <=> parameter.from;
-                }
-
-                Text {
-                    text: "To Commit:";
-                    vertical-alignment: center;
-                }
-
-                LineEdit {
-                    text <=> parameter.to;
-                }
-            }
-
-            Row {
-                Text {
-                    text: "Repository";
-                    vertical-alignment: center;
-                }
-
-                LineEdit {
-                    text <=> parameter.repository;
-                }
-
-                Text {
-                    text: "File to diff";
-                    vertical-alignment: center;
-                }
-
-                LineEdit {
-                    text <=> parameter.filename;
-                }
+        DiffParameterEditor {
+            parameter <=> root.parameter;
+            load_diff => {
+                root.load_diff(root.parameter)
             }
         }
 
-        HorizontalLayout {
-            alignment: center;
-            Button {
-                width: 100px;
-                text: "Load Diff";
-                enabled: !parameter.filename.is-empty && !parameter.from.is-empty && !parameter.to.is-empty && !parameter.repository.is-empty;
-                clicked => {
-                    load_diff(parameter);
-                }
+        FormatEditor {
+            current_theme_index: root.current_theme_index;
+            themes: root.themes;
+            set_theme(new_theme) => {
+                root.set_theme(new_theme)
             }
         }
 
-        HorizontalLayout {
-            alignment: start;
-            spacing: 5px;
-
-            HorizontalLayout {
-                spacing: 5px;
-                Text {
-                    text: "Font size";
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
-                }
-
-                SpinBox {
-                    minimum: 6;
-                    maximum: 40;
-                    value: root.font_size / 1px;
-                    edited(value) => {
-                        root.font_size = value * 1px;
-                    }
-                }
-            }
-
-            HorizontalLayout {
-                spacing: 5px;
-                Text {
-                    text: "Color theme";
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
-                }
-
-                ComboBox {
-                    width: 200px;
-                    current-index: root.current_theme_index;
-                    model: root.themes;
-                    selected(current-value) => {
-                        root.set_theme(current-value)
-                    }
-                }
-            }
-        }
-
-        ListView {
-            private property <int> selectedIndex: -1;
-
-            for line_data[idx] in root.diff_model: HorizontalLayout {
-                private property <bool> isExpanded: idx == selectedIndex || !line_data.note.is-empty;
-
-                LineNumber {
-                    line_number: line_data.old_line_no;
-                    model_length: root.diff_model.length;
-                    font_size: root.font_size;
-                }
-
-                ln := LineNumber {
-                    line_number: line_data.new_line_no;
-                    model_length: root.diff_model.length;
-                    font_size: root.font_size;
-                }
-
-                HorizontalLayout {
-                    Rectangle {
-                        private property <bool> is_enabled: idx != selectedIndex && line_data.note.is-empty;
-                        width: 32px;
-
-                        Image {
-                            source: ta.has-hover ? @image-url("../assets/icons/note-add.svg") : @image-url("");
-                            height: ln.preferred-height;
-                            y: 0;
-                        }
-
-                        ta := TouchArea {
-                            enabled: is_enabled;
-                            clicked => {
-                                selectedIndex = idx;
-                            }
-                        }
-                    }
-
-                    VerticalLayout {
-                        padding-left: 2px;
-                        padding-right: 2px;
-                        Rectangle {
-                            states [
-                                active-removed when line-data.status == LineStatus.Removed: {
-                                    background: root.added_color;
-                                }
-                                active-added when line-data.status == LineStatus.Added: {
-                                    background: root.removed_color;
-                                }
-                            ]
-                            HorizontalLayout {
-                                st := StyledText {
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                    default-font-size: root.font_size;
-                                    default-font-family: "JetBrains Mono NL";
-                                    text: line_data.styled_line;
-                                }
-
-                                Rectangle { }
-                            }
-                        }
-
-                        if isExpanded: Rectangle {
-                            border-color: Palette.border;
-                            border-width: 1px;
-                            background: Palette.control-background;
-
-                            HorizontalLayout {
-                                init => {
-                                    if line-data.note.is-empty {
-                                        isEdit = true;
-                                    }
-                                }
-
-                                padding: 8px;
-                                spacing: 5px;
-
-                                private property <bool> isEdit: false;
-                                CheckBox {
-                                    checked: line_data.is_done;
-                                    toggled => {
-                                        line_data.is_done = self.checked;
-                                    }
-                                }
-
-                                if isEdit: Rectangle {
-                                    Timer {
-                                        interval: 5ms;
-                                        running: true;
-                                        triggered => {
-                                            self.running = false;
-                                            le.select-all();
-                                            le.focus();
-                                        }
-                                    }
-
-                                    le := LineEdit {
-                                        function reset_index_selection() {
-                                            isEdit = false;
-                                            selectedIndex = -1;
-                                        }
-
-                                        width: parent.width;
-                                        height: parent.height;
-                                        text: line_data.note;
-                                        changed has-focus => {
-                                            if !self.has-focus {
-                                                reset_index_selection();
-                                            }
-                                        }
-                                        accepted(text) => {
-                                            line_data.note = text;
-                                            reset_index_selection();
-                                            self.clear-focus();
-                                        }
-                                        key-pressed(event) => {
-                                            if (event.text == Key.Escape) {
-                                                self.text = line_data.note;
-                                                reset_index_selection();
-                                                self.clear-focus();
-                                                return EventResult.accept;
-                                            }
-                                            return EventResult.reject;
-                                        }
-                                    }
-                                }
-                                if !isEdit: HorizontalLayout {
-                                    Rectangle {
-                                        width: 18px;
-                                    }
-
-                                    Text {
-                                        text: line_data.note;
-                                        wrap: word-wrap;
-                                        vertical-alignment: center;
-                                        horizontal-alignment: left;
-                                    }
-                                }
-                                if !isEdit: Button {
-                                    width: 40px;
-                                    icon: @image-url("../assets/icons/edit.svg");
-                                    icon-size: 16px;
-                                    colorize-icon: true;
-                                    checkable: true;
-                                    checked: isEdit;
-                                    clicked => {
-                                        isEdit = true;
-                                        selectedIndex = idx;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        FileDiffView {
+            diff_model: root.diff_model;
         }
     }
 }
