@@ -284,7 +284,9 @@ export component AppWindow inherits Window {
 
                             HorizontalLayout {
                                 init => {
-                                    isEdit = true;
+                                    if line-data.note.is-empty {
+                                        isEdit = true;
+                                    }
                                 }
 
                                 padding: 8px;
